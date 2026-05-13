@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Feedback Analysis for Tourism</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Tourism intelligence dashboard</p>
+        <h1>Smart Feedback Analysis for Tourism</h1>
+      </div>
+    </header>
+
+    <section class="control-panel" aria-label="Tourist place selector">
+      <div class="field grow">
+        <label for="placeSearch">Select or search place</label>
+        <input id="placeSearch" list="placeOptions" placeholder="Type a tourist place..." autocomplete="off" />
+        <datalist id="placeOptions"></datalist>
+      </div>
+      <div class="field">
+        <label for="countryFilter">Country</label>
+        <select id="countryFilter"></select>
+      </div>
+      <button id="analyzeBtn" class="primary-btn" type="button">Analyze Place</button>
+    </section>
+
+    <main>
+      <section class="summary-grid" aria-label="Selected place summary">
+        <article class="summary-card hero-card">
+          <p class="label">Selected place</p>
+          <h2 id="selectedPlace">-</h2>
+          <p id="selectedCountry" class="muted">-</p>
+        </article>
+        <article class="summary-card">
+          <p class="label">Average rating</p>
+          <strong id="ratingValue">-</strong>
+          <div class="stars" id="ratingStars" aria-label="Rating stars"></div>
+        </article>
+        <article class="summary-card">
+          <p class="label">Food availability</p>
+          <strong id="foodLevel">-</strong>
+          <span id="foodSignal" class="status-chip"></span>
+        </article>
+        <article class="summary-card">
+          <p class="label">Transport facilities</p>
+          <strong id="transportLevel">-</strong>
+          <span id="transportSignal" class="status-chip"></span>
+        </article>
+      </section>
+
+      <nav class="tabs" aria-label="Analysis tabs">
+        <button class="tab active" data-tab="sentiment">Sentiment</button>
+        <button class="tab" data-tab="food">Food</button>
+        <button class="tab" data-tab="transport">Transport</button>
+        <button class="tab" data-tab="attraction">Attraction</button>
+        <button class="tab" data-tab="images">Images</button>
+      </nav>
+
+      <section id="sentiment" class="tab-panel active">
+        <div class="panel-grid two">
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Sentiment Split</h3>
+              <p>Based on review words and rating signals.</p>
+            </div>
+            <div id="sentimentPictograms" class="pictogram-grid"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Review Highlights</h3>
+              <p>Quick read of positive, neutral, and negative comments.</p>
+            </div>
+            <div id="reviewList" class="review-list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="food" class="tab-panel">
+        <div class="panel-grid two">
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Food Feedback Themes</h3>
+              <p>Most repeated food comments for the selected place.</p>
+            </div>
+            <div id="foodPictograms" class="pictogram-grid"></div>
+          </article>
+          <article class="panel insight-panel">
+            <h3>Food Insights</h3>
+            <div id="foodInsights"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="transport" class="tab-panel">
+        <div class="panel-grid two">
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Transport Feedback Themes</h3>
+              <p>Mobility strengths and visitor pain points.</p>
+            </div>
+            <div id="transportPictograms" class="pictogram-grid"></div>
+          </article>
+          <article class="panel insight-panel">
+            <h3>Transport Insights</h3>
+            <div id="transportInsights"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="attraction" class="tab-panel">
+        <div class="panel-grid two">
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Attraction Experience</h3>
+              <p>What visitors notice most about the attraction.</p>
+            </div>
+            <div id="attractionPictograms" class="pictogram-grid compact"></div>
+          </article>
+          <article class="panel insight-panel">
+            <h3>Recommended Actions</h3>
+            <div id="actionList"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="images" class="tab-panel">
+        <article class="panel image-panel">
+          <div class="panel-heading">
+            <h3>Place Images</h3>
+            <p>Images are loaded using the selected place and country name.</p>
+          </div>
+          <div id="imageGrid" class="image-grid"></div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
