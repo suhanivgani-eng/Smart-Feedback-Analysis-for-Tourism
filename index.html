@@ -10,22 +10,60 @@
   <div class="app-shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">Tourism intelligence dashboard</p>
-        <h1>Smart Feedback Analysis for Tourism</h1>
+        <p class="eyebrow" data-i18n="eyebrow">Tourism intelligence dashboard</p>
+        <h1 data-i18n="title">Smart Feedback Analysis for Tourism</h1>
+      </div>
+      <div class="language-box">
+        <label for="languageSelect" data-i18n="language">Language</label>
+        <select id="languageSelect">
+          <option value="en">English</option>
+          <optgroup label="Indian languages">
+            <option value="as">Assamese</option>
+            <option value="bn">Bengali</option>
+            <option value="brx">Bodo</option>
+            <option value="doi">Dogri</option>
+            <option value="gu">Gujarati</option>
+            <option value="hi">Hindi</option>
+            <option value="kn">Kannada</option>
+            <option value="ks">Kashmiri</option>
+            <option value="kok">Konkani</option>
+            <option value="mai">Maithili</option>
+            <option value="ml">Malayalam</option>
+            <option value="mni-Mtei">Manipuri</option>
+            <option value="mr">Marathi</option>
+            <option value="ne">Nepali</option>
+            <option value="or">Odia</option>
+            <option value="pa">Punjabi</option>
+            <option value="sa">Sanskrit</option>
+            <option value="sat">Santali</option>
+            <option value="sd">Sindhi</option>
+            <option value="ta">Tamil</option>
+            <option value="te">Telugu</option>
+            <option value="ur">Urdu</option>
+          </optgroup>
+          <optgroup label="Global">
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="ar">Arabic</option>
+            <option value="zh-CN">Chinese</option>
+          </optgroup>
+        </select>
+        <a id="translateLink" href="#" target="_blank" rel="noopener" data-i18n="translateAll">Translate more languages</a>
+        <div id="google_translate_element" class="translate-widget" aria-label="Full page translator"></div>
       </div>
     </header>
 
     <section class="control-panel" aria-label="Tourist place selector">
       <div class="field grow">
-        <label for="placeSearch">Select or search place</label>
-        <input id="placeSearch" list="placeOptions" placeholder="Type a tourist place..." autocomplete="off" />
+        <label for="placeSearch" data-i18n="placeLabel">Select or search any world place</label>
+        <input id="placeSearch" list="placeOptions" placeholder="Type a tourist place, city, landmark..." autocomplete="off" />
         <datalist id="placeOptions"></datalist>
       </div>
       <div class="field">
-        <label for="countryFilter">Country</label>
+        <label for="countryFilter" data-i18n="countryLabel">Dataset country filter</label>
         <select id="countryFilter"></select>
       </div>
-      <button id="analyzeBtn" class="primary-btn" type="button">Analyze Place</button>
+      <button id="analyzeBtn" class="primary-btn" type="button" data-i18n="analyze">Analyze Place</button>
     </section>
 
     <main>
@@ -53,27 +91,31 @@
       </section>
 
       <nav class="tabs" aria-label="Analysis tabs">
-        <button class="tab active" data-tab="sentiment">Sentiment</button>
-        <button class="tab" data-tab="food">Food</button>
-        <button class="tab" data-tab="transport">Transport</button>
-        <button class="tab" data-tab="attraction">Attraction</button>
-        <button class="tab" data-tab="images">Images</button>
+        <button class="tab active" data-tab="sentiment" data-i18n="sentimentTab">Sentiment</button>
+        <button class="tab" data-tab="food" data-i18n="foodTab">Food</button>
+        <button class="tab" data-tab="transport" data-i18n="transportTab">Transport</button>
+        <button class="tab" data-tab="attraction" data-i18n="attractionTab">Attraction</button>
+        <button class="tab" data-tab="travel" data-i18n="travelTab">Travel Dashboard</button>
+        <button class="tab" data-tab="expenses" data-i18n="expensesTab">Expenses</button>
+        <button class="tab" data-tab="images" data-i18n="imagesTab">Images</button>
       </nav>
 
       <section id="sentiment" class="tab-panel active">
         <div class="panel-grid two">
           <article class="panel">
             <div class="panel-heading">
-              <h3>Sentiment Split</h3>
-              <p>Based on review words and rating signals.</p>
+              <h3 data-i18n="sentimentSplit">Sentiment Split</h3>
+              <p data-i18n="sentimentDesc">Based on local reviews plus public-source text when available.</p>
             </div>
             <div id="sentimentPictograms" class="pictogram-grid"></div>
+            <div id="sentimentPercentages" class="percentage-list"></div>
           </article>
           <article class="panel">
             <div class="panel-heading">
-              <h3>Review Highlights</h3>
-              <p>Quick read of positive, neutral, and negative comments.</p>
+              <h3 data-i18n="reviewHighlights">Review Highlights</h3>
+              <p data-i18n="reviewDesc">Quick read of positive, neutral, and negative comments.</p>
             </div>
+            <div id="reviewSourceStatus" class="dashboard-note"></div>
             <div id="reviewList" class="review-list"></div>
           </article>
         </div>
@@ -127,6 +169,76 @@
         </div>
       </section>
 
+      <section id="travel" class="tab-panel">
+        <div class="panel-grid travel-layout">
+          <article class="panel location-panel">
+            <div class="panel-heading">
+              <h3>Exact Location</h3>
+              <p>Resolved from public map data for the selected or typed place.</p>
+            </div>
+            <div id="locationDetails" class="travel-details"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Nearby Hotel Availability</h3>
+              <p>Public lodging results within roughly 5 km, with live booking links.</p>
+            </div>
+            <div id="hotelAvailability" class="hotel-list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Best Season</h3>
+              <p>Season guidance and recommendations for planning the visit.</p>
+            </div>
+            <div id="seasonGuide" class="season-guide"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading">
+              <h3>Live Review Sources</h3>
+              <p>Review and travel research links beyond the local sample dataset.</p>
+            </div>
+            <div id="liveReviewSources" class="source-list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="expenses" class="tab-panel">
+        <div class="panel-grid travel-layout">
+          <article class="panel">
+            <div class="panel-heading">
+              <h3 data-i18n="expensePlanner">Travel Expense Planner</h3>
+              <p data-i18n="expenseDesc">Temporary estimate based on lodging, food, local transport, entry, and buffer costs.</p>
+            </div>
+            <div class="expense-controls">
+              <div class="field">
+                <label for="travelerCount" data-i18n="travelers">Passengers</label>
+                <input id="travelerCount" type="number" min="1" max="20" value="2" />
+              </div>
+              <div class="field">
+                <label for="nightCount" data-i18n="nights">Nights</label>
+                <input id="nightCount" type="number" min="1" max="30" value="3" />
+              </div>
+              <div class="field">
+                <label for="budgetStyle" data-i18n="budgetStyle">Budget style</label>
+                <select id="budgetStyle">
+                  <option value="budget">Budget</option>
+                  <option value="mid" selected>Mid-range</option>
+                  <option value="premium">Premium</option>
+                </select>
+              </div>
+            </div>
+            <div id="expenseSummary" class="expense-summary"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading">
+              <h3 data-i18n="temporaryAdvice">Temporary Advice</h3>
+              <p data-i18n="temporaryAdviceDesc">Quick planning guidance until live booking and review APIs are connected.</p>
+            </div>
+            <div id="temporaryAdviceList" class="season-guide"></div>
+          </article>
+        </div>
+      </section>
+
       <section id="images" class="tab-panel">
         <article class="panel image-panel">
           <div class="panel-heading">
@@ -140,5 +252,6 @@
   </div>
 
   <script src="app.js"></script>
+  <script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 </body>
 </html>
