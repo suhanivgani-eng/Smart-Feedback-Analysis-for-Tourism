@@ -5,6 +5,141 @@ const NEGATIVE = ['difficult', 'crowded', 'long', 'trap', 'overpriced', 'expensi
 const COLORS = ['#0f766e', '#2563eb', '#e15f41', '#d99a16', '#168354', '#7c3aed', '#c24136', '#0891b2'];
 const state = { selected: TOURISM_DATA[0], tab: 'sentiment' };
 let imageRequestId = 0;
+let locationRequestId = 0;
+let reviewRequestId = 0;
+let activeCurrency = null;
+const publicReviewCache = new Map();
+const PLACE_EXPENSE_RULES = [
+  { pattern: /taj mahal|eiffel tower|burj khalifa|disney|universal studios|colosseum|louvre|machu picchu|statue of liberty|great wall/i, factor: 1.28, entry: 1.45, label: 'high-demand landmark pricing' },
+  { pattern: /palace|fort|castle|museum|gallery|temple|mosque|church|cathedral|monument|memorial|caves?/i, factor: 1.08, entry: 1.25, label: 'ticketed attraction costs' },
+  { pattern: /beach|island|resort|maldives|bali|goa|phuket|santorini|seychelles/i, factor: 1.22, entry: 0.8, label: 'seasonal resort pricing' },
+  { pattern: /mount|mountain|hill|hampi|valley|falls|waterfall|national park|safari|forest|lake|trek/i, factor: 1.12, entry: 1.15, label: 'nature-trip transport and permit costs' },
+  { pattern: /city|market|bazaar|street|ghats|old town|downtown|square/i, factor: 0.96, entry: 0.85, label: 'city walking and food flexibility' }
+];
+const I18N = {
+  en: {
+    eyebrow: 'Tourism intelligence dashboard', title: 'Smart Feedback Analysis for Tourism', language: 'Language', translateAll: 'Translate more languages',
+    placeLabel: 'Select or search any world place', countryLabel: 'Dataset country filter', analyze: 'Analyze Place',
+    sentimentTab: 'Sentiment', foodTab: 'Food', transportTab: 'Transport', attractionTab: 'Attraction', travelTab: 'Travel Dashboard', expensesTab: 'Expenses', imagesTab: 'Images',
+    sentimentSplit: 'Sentiment Split', sentimentDesc: 'Based on local reviews plus public-source text when available.', reviewHighlights: 'Review Highlights', reviewDesc: 'Quick read of positive, neutral, and negative comments.',
+    expensePlanner: 'Travel Expense Planner', expenseDesc: 'Temporary estimate based on lodging, food, local transport, entry, and buffer costs.', travelers: 'Passengers', nights: 'Nights', budgetStyle: 'Budget style',
+    temporaryAdvice: 'Temporary Advice', temporaryAdviceDesc: 'Quick planning guidance until live booking and review APIs are connected.'
+  },
+  hi: {
+    eyebrow: 'पर्यटन इंटेलिजेंस डैशबोर्ड', title: 'पर्यटन के लिए स्मार्ट फीडबैक विश्लेषण', language: 'भाषा', translateAll: 'और भाषाओं में अनुवाद',
+    placeLabel: 'दुनिया की कोई भी जगह खोजें', countryLabel: 'डेटासेट देश फिल्टर', analyze: 'स्थान विश्लेषण करें',
+    sentimentTab: 'भावना', foodTab: 'भोजन', transportTab: 'यातायात', attractionTab: 'आकर्षण', travelTab: 'यात्रा डैशबोर्ड', expensesTab: 'खर्च', imagesTab: 'तस्वीरें',
+    sentimentSplit: 'भावना प्रतिशत', sentimentDesc: 'स्थानीय समीक्षाओं और उपलब्ध सार्वजनिक स्रोत पाठ पर आधारित।', reviewHighlights: 'समीक्षा मुख्य बातें', reviewDesc: 'सकारात्मक, सामान्य और नकारात्मक टिप्पणियों का सार।',
+    expensePlanner: 'यात्रा खर्च योजनाकार', expenseDesc: 'होटल, भोजन, स्थानीय यात्रा, टिकट और बफर पर आधारित अस्थायी अनुमान।', travelers: 'यात्री', nights: 'रातें', budgetStyle: 'बजट शैली',
+    temporaryAdvice: 'अस्थायी सलाह', temporaryAdviceDesc: 'लाइव बुकिंग और समीक्षा API जुड़ने तक तेज योजना सलाह।'
+  },
+  es: {
+    eyebrow: 'Panel de inteligencia turística', title: 'Análisis inteligente de opiniones turísticas', language: 'Idioma', translateAll: 'Traducir más idiomas',
+    placeLabel: 'Busca cualquier lugar del mundo', countryLabel: 'Filtro de país del conjunto de datos', analyze: 'Analizar lugar',
+    sentimentTab: 'Sentimiento', foodTab: 'Comida', transportTab: 'Transporte', attractionTab: 'Atracción', travelTab: 'Viaje', expensesTab: 'Gastos', imagesTab: 'Imágenes',
+    sentimentSplit: 'Porcentaje de sentimiento', sentimentDesc: 'Basado en reseñas locales y texto público cuando está disponible.', reviewHighlights: 'Resumen de reseñas', reviewDesc: 'Lectura rápida de comentarios positivos, neutrales y negativos.',
+    expensePlanner: 'Planificador de gastos', expenseDesc: 'Estimación temporal de alojamiento, comida, transporte local, entradas y margen.', travelers: 'Viajeros', nights: 'Noches', budgetStyle: 'Estilo de presupuesto',
+    temporaryAdvice: 'Consejos temporales', temporaryAdviceDesc: 'Guía rápida hasta conectar APIs reales de reservas y reseñas.'
+  },
+  fr: {
+    eyebrow: 'Tableau de bord touristique', title: 'Analyse intelligente des avis touristiques', language: 'Langue', translateAll: 'Traduire plus de langues',
+    placeLabel: 'Rechercher un lieu dans le monde', countryLabel: 'Filtre pays du jeu de données', analyze: 'Analyser',
+    sentimentTab: 'Sentiment', foodTab: 'Repas', transportTab: 'Transport', attractionTab: 'Attraction', travelTab: 'Voyage', expensesTab: 'Dépenses', imagesTab: 'Images',
+    sentimentSplit: 'Pourcentage de sentiment', sentimentDesc: 'Basé sur les avis locaux et les textes publics disponibles.', reviewHighlights: 'Points clés des avis', reviewDesc: 'Lecture rapide des commentaires positifs, neutres et négatifs.',
+    expensePlanner: 'Planificateur de dépenses', expenseDesc: 'Estimation temporaire: hôtel, repas, transport local, billets et marge.', travelers: 'Voyageurs', nights: 'Nuits', budgetStyle: 'Style de budget',
+    temporaryAdvice: 'Conseils temporaires', temporaryAdviceDesc: 'Conseils rapides avant connexion aux APIs de réservation et avis.'
+  },
+  ar: {
+    eyebrow: 'لوحة ذكاء السياحة', title: 'تحليل ذكي لملاحظات السياحة', language: 'اللغة', translateAll: 'ترجمة إلى لغات أكثر',
+    placeLabel: 'ابحث عن أي مكان في العالم', countryLabel: 'مرشح بلد البيانات', analyze: 'حلل المكان',
+    sentimentTab: 'المشاعر', foodTab: 'الطعام', transportTab: 'النقل', attractionTab: 'المعلم', travelTab: 'السفر', expensesTab: 'المصاريف', imagesTab: 'الصور',
+    sentimentSplit: 'نسب المشاعر', sentimentDesc: 'حسب المراجعات المحلية والنصوص العامة عند توفرها.', reviewHighlights: 'أبرز المراجعات', reviewDesc: 'ملخص سريع للتعليقات الإيجابية والمحايدة والسلبية.',
+    expensePlanner: 'مخطط مصاريف السفر', expenseDesc: 'تقدير مؤقت للفندق والطعام والنقل المحلي والتذاكر والاحتياط.', travelers: 'المسافرون', nights: 'الليالي', budgetStyle: 'نمط الميزانية',
+    temporaryAdvice: 'نصائح مؤقتة', temporaryAdviceDesc: 'إرشاد سريع حتى ربط واجهات الحجز والمراجعات.'
+  },
+  'zh-CN': {
+    eyebrow: '旅游智能仪表板', title: '旅游反馈智能分析', language: '语言', translateAll: '翻译更多语言',
+    placeLabel: '搜索世界任意地点', countryLabel: '数据集国家筛选', analyze: '分析地点',
+    sentimentTab: '情绪', foodTab: '餐饮', transportTab: '交通', attractionTab: '景点', travelTab: '旅行', expensesTab: '费用', imagesTab: '图片',
+    sentimentSplit: '情绪百分比', sentimentDesc: '基于本地评论和可用公共来源文本。', reviewHighlights: '评论摘要', reviewDesc: '快速查看正面、中性和负面评论。',
+    expensePlanner: '旅行费用规划', expenseDesc: '基于住宿、餐饮、本地交通、门票和缓冲费用的临时估算。', travelers: '旅客', nights: '晚数', budgetStyle: '预算类型',
+    temporaryAdvice: '临时建议', temporaryAdviceDesc: '在接入实时预订和评论 API 前提供快速规划建议。'
+  }
+};
+
+const INDIAN_LANGUAGE_NAMES = {
+  as: 'Assamese', bn: 'Bengali', brx: 'Bodo', doi: 'Dogri', gu: 'Gujarati', hi: 'Hindi',
+  kn: 'Kannada', ks: 'Kashmiri', kok: 'Konkani', mai: 'Maithili', ml: 'Malayalam',
+  'mni-Mtei': 'Manipuri', mr: 'Marathi', ne: 'Nepali', or: 'Odia', pa: 'Punjabi',
+  sa: 'Sanskrit', sat: 'Santali', sd: 'Sindhi', ta: 'Tamil', te: 'Telugu', ur: 'Urdu'
+};
+
+const COUNTRY_CURRENCY = {
+  india: { code: 'INR', rate: 83, locale: 'en-IN' },
+  usa: { code: 'USD', rate: 1, locale: 'en-US' },
+  'united states': { code: 'USD', rate: 1, locale: 'en-US' },
+  france: { code: 'EUR', rate: 0.92, locale: 'fr-FR' },
+  germany: { code: 'EUR', rate: 0.92, locale: 'de-DE' },
+  italy: { code: 'EUR', rate: 0.92, locale: 'it-IT' },
+  spain: { code: 'EUR', rate: 0.92, locale: 'es-ES' },
+  japan: { code: 'JPY', rate: 156, locale: 'ja-JP' },
+  australia: { code: 'AUD', rate: 1.52, locale: 'en-AU' },
+  brazil: { code: 'BRL', rate: 5.2, locale: 'pt-BR' },
+  'south africa': { code: 'ZAR', rate: 18.2, locale: 'en-ZA' },
+  china: { code: 'CNY', rate: 7.24, locale: 'zh-CN' },
+  'united kingdom': { code: 'GBP', rate: 0.78, locale: 'en-GB' },
+  canada: { code: 'CAD', rate: 1.36, locale: 'en-CA' },
+  singapore: { code: 'SGD', rate: 1.35, locale: 'en-SG' },
+  thailand: { code: 'THB', rate: 36.5, locale: 'th-TH' },
+  vietnam: { code: 'VND', rate: 25400, locale: 'vi-VN' },
+  indonesia: { code: 'IDR', rate: 16200, locale: 'id-ID' },
+  nepal: { code: 'NPR', rate: 133, locale: 'en-NP' },
+  'sri lanka': { code: 'LKR', rate: 302, locale: 'en-LK' },
+  mexico: { code: 'MXN', rate: 16.8, locale: 'es-MX' },
+  peru: { code: 'PEN', rate: 3.72, locale: 'es-PE' },
+  egypt: { code: 'EGP', rate: 47.5, locale: 'ar-EG' },
+  morocco: { code: 'MAD', rate: 10, locale: 'fr-MA' },
+  turkey: { code: 'TRY', rate: 32.2, locale: 'tr-TR' }
+};
+
+const GOOGLE_LANG_CODES = {
+  en: 'en', as: 'as', bn: 'bn', brx: 'brx', doi: 'doi', gu: 'gu', hi: 'hi',
+  kn: 'kn', ks: 'ks', kok: 'gom', mai: 'mai', ml: 'ml', 'mni-Mtei': 'mni-Mtei',
+  mr: 'mr', ne: 'ne', or: 'or', pa: 'pa', sa: 'sa', sat: 'sat', sd: 'sd',
+  ta: 'ta', te: 'te', ur: 'ur', es: 'es', fr: 'fr', ar: 'ar', 'zh-CN': 'zh-CN'
+};
+
+let activeLanguage = 'en';
+const PHRASES = {
+  en: {
+    positive: 'Positive', neutral: 'Neutral', negative: 'Negative',
+    loadingPublic: 'Collecting public-source text signals...',
+    signals: 'Sentiment uses {total} text signals: {local} local review items and {public} public-source items. Direct Google, Tripadvisor, and Booking reviews need official API access.',
+    estimatedTotal: 'Estimated total in {currency}', expenseFor: 'For {travelers} passenger{pluralTravelers}, {nights} night{pluralNights}, {style} style in {country}.',
+    hotelStay: 'Hotel / stay', foodWater: 'Food and water', localTransport: 'Local transport', tickets: 'Tickets / activities', emergencyBuffer: 'Emergency buffer',
+    bookingAdvice: 'Booking advice', moneyAdvice: 'Money advice', reviewAdvice: 'Review advice', timingAdvice: 'Timing advice', priceAdvice: 'Price advice', foodAdvice: 'Food advice',
+    bookingBudget: 'Book refundable hotels early and compare hostel or guest-house options.', bookingOther: 'Compare hotel ratings with location before paying premium rates.',
+    moneyText: 'Keep at least {amount} extra for weather, queues, local taxis, and price changes.', reviewText: 'Use the review-source links to confirm recent crowd, safety, closure, and hotel feedback before final booking.',
+    timingText: 'Choose weekday mornings and reserve nearby lodging to reduce waiting time.', priceText: 'Avoid first-offer tourist prices; compare menus, rides, and ticket counters.', foodText: 'Carry water and snacks, especially if traveling with children or elders.',
+    priceRange: 'Estimated price range', priceNote: 'Prices are planning estimates. Live room availability changes by date, occupancy, and booking site.',
+    bestSeason: 'Best season to visit', recommendedSeason: 'Recommended in that season', planningCaution: 'Planning caution', seasonNote: 'Use weather and local event checks before final booking because seasonal patterns can shift.',
+    openSource: 'Open source'
+  },
+  hi: {
+    positive: 'सकारात्मक', neutral: 'सामान्य', negative: 'नकारात्मक',
+    loadingPublic: 'सार्वजनिक स्रोतों से पाठ संकेत एकत्र किए जा रहे हैं...',
+    signals: 'भावना विश्लेषण {total} पाठ संकेतों पर आधारित है: {local} स्थानीय समीक्षा आइटम और {public} सार्वजनिक स्रोत आइटम। Google, Tripadvisor और Booking की सीधी समीक्षाओं के लिए आधिकारिक API चाहिए।',
+    estimatedTotal: '{currency} में अनुमानित कुल खर्च', expenseFor: '{travelers} यात्री, {nights} रात, {country} में {style} शैली के लिए।',
+    hotelStay: 'होटल / ठहरना', foodWater: 'भोजन और पानी', localTransport: 'स्थानीय यातायात', tickets: 'टिकट / गतिविधियां', emergencyBuffer: 'आपातकालीन बफर',
+    bookingAdvice: 'बुकिंग सलाह', moneyAdvice: 'पैसे की सलाह', reviewAdvice: 'समीक्षा सलाह', timingAdvice: 'समय सलाह', priceAdvice: 'कीमत सलाह', foodAdvice: 'भोजन सलाह',
+    bookingBudget: 'रिफंडेबल होटल जल्दी बुक करें और हॉस्टल या गेस्ट-हाउस विकल्पों की तुलना करें।', bookingOther: 'प्रीमियम दर देने से पहले होटल रेटिंग और लोकेशन की तुलना करें।',
+    moneyText: 'मौसम, कतार, स्थानीय टैक्सी और कीमत बदलाव के लिए कम से कम {amount} अतिरिक्त रखें।', reviewText: 'अंतिम बुकिंग से पहले हाल की भीड़, सुरक्षा, बंदी और होटल फीडबैक की पुष्टि करें।',
+    timingText: 'कम प्रतीक्षा के लिए सप्ताह के दिनों की सुबह जाएं और पास में ठहरने की व्यवस्था करें।', priceText: 'पहली पर्यटक कीमत न मानें; मेनू, राइड और टिकट काउंटर की तुलना करें।', foodText: 'बच्चों या बुजुर्गों के साथ यात्रा में पानी और स्नैक्स साथ रखें।',
+    priceRange: 'अनुमानित कीमत सीमा', priceNote: 'कीमतें योजना अनुमान हैं। कमरे की उपलब्धता तारीख, लोगों की संख्या और बुकिंग साइट के अनुसार बदलती है।',
+    bestSeason: 'घूमने का श्रेष्ठ मौसम', recommendedSeason: 'उस मौसम में सुझाव', planningCaution: 'योजना सावधानी', seasonNote: 'अंतिम बुकिंग से पहले मौसम और स्थानीय कार्यक्रम जांचें क्योंकि मौसम के पैटर्न बदल सकते हैं।',
+    openSource: 'स्रोत खोलें'
+  }
+};
 
 const $ = (id) => document.getElementById(id);
 const byPlace = new Map(TOURISM_DATA.map(item => [item.place.toLowerCase(), item]));
@@ -45,13 +180,73 @@ function sentimentCounts(reviews) {
   }, {});
 }
 
+function sentimentPercentages(counts) {
+  const total = counts.positive + counts.neutral + counts.negative || 1;
+  return {
+    positive: Math.round((counts.positive / total) * 100),
+    neutral: Math.round((counts.neutral / total) * 100),
+    negative: Math.round((counts.negative / total) * 100),
+    total
+  };
+}
+
+function applyLanguage(language) {
+  activeLanguage = language;
+  const copy = I18N[language] || I18N.en;
+  document.documentElement.lang = language;
+  document.documentElement.dir = /^(ar|ur|ks|sd)/.test(language) ? 'rtl' : 'ltr';
+  document.querySelectorAll('[data-i18n]').forEach(element => {
+    const key = element.dataset.i18n;
+    if (copy[key]) element.textContent = copy[key];
+  });
+  if (!I18N[language] && INDIAN_LANGUAGE_NAMES[language]) {
+    $('translateLink').textContent = `Translate full app to ${INDIAN_LANGUAGE_NAMES[language]}`;
+  }
+  const translateTarget = language === 'en' ? 'auto' : (GOOGLE_LANG_CODES[language] || language);
+  $('translateLink').href = `https://translate.google.com/translate?sl=auto&tl=${translateTarget}&u=${encodeURIComponent(location.href)}`;
+  renderAll();
+  requestPageTranslation(language);
+}
+
+function t(key, replacements = {}) {
+  const text = (PHRASES[activeLanguage] && PHRASES[activeLanguage][key]) || PHRASES.en[key] || key;
+  return Object.entries(replacements).reduce((value, [name, replacement]) => value.replaceAll(`{${name}}`, replacement), text);
+}
+
+function requestPageTranslation(language) {
+  const googleCode = GOOGLE_LANG_CODES[language] || language;
+  if (language === 'en') {
+    document.cookie = 'googtrans=; Max-Age=0; path=/';
+    return;
+  }
+  document.cookie = `googtrans=/en/${googleCode}; path=/`;
+  const combo = document.querySelector('.goog-te-combo');
+  if (combo && combo.value !== googleCode) {
+    combo.value = googleCode;
+    combo.dispatchEvent(new Event('change'));
+  }
+}
+
+window.googleTranslateElementInit = function googleTranslateElementInit() {
+  if (!window.google?.translate?.TranslateElement) return;
+  new window.google.translate.TranslateElement({
+    pageLanguage: 'en',
+    includedLanguages: Object.values(GOOGLE_LANG_CODES).join(','),
+    autoDisplay: false
+  }, 'google_translate_element');
+  requestPageTranslation(activeLanguage);
+};
+
 function init() {
   const countries = ['All countries', ...Array.from(new Set(TOURISM_DATA.map(item => item.country))).sort()];
   $('countryFilter').innerHTML = countries.map(country => `<option value="${country}">${country}</option>`).join('');
   $('countryFilter').addEventListener('change', updatePlaceOptions);
   $('analyzeBtn').addEventListener('click', analyzeFromInput);
   $('placeSearch').addEventListener('keydown', event => { if (event.key === 'Enter') analyzeFromInput(); });
+  $('languageSelect').addEventListener('change', event => applyLanguage(event.target.value));
+  ['travelerCount', 'nightCount', 'budgetStyle'].forEach(id => $(id).addEventListener('input', () => renderExpenses(state.selected)));
   document.querySelectorAll('.tab').forEach(button => button.addEventListener('click', () => switchTab(button.dataset.tab)));
+  applyLanguage('en');
   updatePlaceOptions();
   selectPlace(TOURISM_DATA[0]);
 }
@@ -65,24 +260,54 @@ function updatePlaceOptions() {
 
 function analyzeFromInput() {
   const query = $('placeSearch').value.trim().toLowerCase();
+  const rawQuery = $('placeSearch').value.trim();
   const country = $('countryFilter').value;
   const scoped = TOURISM_DATA.filter(item => country === 'All countries' || item.country === country);
   const exact = byPlace.get(query);
   const fuzzy = scoped.find(item => item.place.toLowerCase().includes(query)) || TOURISM_DATA.find(item => item.place.toLowerCase().includes(query));
-  selectPlace(exact || fuzzy || scoped[0] || TOURISM_DATA[0]);
+  selectPlace(exact || fuzzy || (rawQuery ? createDynamicPlace(rawQuery, country) : scoped[0] || TOURISM_DATA[0]));
 }
 
-function selectPlace(item) {
-  state.selected = item;
-  $('placeSearch').value = item.place;
+function createDynamicPlace(place, country) {
+  const cleanedCountry = country && country !== 'All countries' ? country : 'Worldwide';
+  return {
+    id: 'dynamic-' + place.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    place,
+    country: cleanedCountry,
+    foodAvailability: 'High',
+    transportFacilities: 'Good',
+    rating: 4.6,
+    feedback: buildDynamicFeedback(place)
+  };
+}
+
+function updateSelectedSummary(item) {
   $('selectedPlace').textContent = item.place;
-  $('selectedCountry').textContent = item.country;
+  $('selectedCountry').textContent = getDisplayCountry(item);
   $('ratingValue').textContent = item.rating.toFixed(1);
   $('ratingStars').textContent = starText(item.rating);
   $('foodLevel').textContent = item.foodAvailability;
   $('transportLevel').textContent = item.transportFacilities;
   $('foodSignal').textContent = foodSignal(item.foodAvailability);
   $('transportSignal').textContent = transportSignal(item.transportFacilities);
+}
+
+function getDisplayCountry(item) {
+  return item.resolvedCountry || item.country;
+}
+
+function buildDynamicFeedback(place) {
+  return [
+    `${place} is highly recommended for sightseeing and trip planning. Transport: Public maps, taxis, and walking routes are usually easy to compare. Food: Cafes and local restaurants are generally available nearby.`,
+    `${place} is great for photography, families, and flexible travel plans. Transport: Route options can be checked quickly with live maps. Food: Local food choices are useful for different passenger needs.`,
+    `${place} is worth visiting with current public travel information. Transport: Nearby stays and ride options make planning convenient. Food: Search results usually help find good meals before visiting.`
+  ].map((text, index) => `Review ${index + 1}: ${text}`).join(' | ');
+}
+
+function selectPlace(item) {
+  state.selected = item;
+  $('placeSearch').value = item.place;
+  updateSelectedSummary(item);
   renderAll();
 }
 
@@ -108,23 +333,101 @@ function transportSignal(level) {
 
 function renderAll() {
   const item = state.selected;
-  const reviews = splitReviews(item);
-  renderSentiment(reviews);
+  const reviews = getCombinedReviews(item);
+  renderSentiment(item, reviews);
   renderFood(item, reviews);
   renderTransport(item, reviews);
   renderAttraction(item, reviews);
+  renderTravelDashboard(item, reviews);
+  renderExpenses(item);
   renderImages(item);
 }
 
-function renderSentiment(reviews) {
+function renderSentiment(item, reviews) {
   const counts = sentimentCounts(reviews);
+  const percents = sentimentPercentages(counts);
   renderPictograms('sentimentPictograms', [
-    { icon: '😊', label: 'Positive', value: counts.positive, tone: 'good' },
-    { icon: '😐', label: 'Neutral', value: counts.neutral, tone: 'warn' },
-    { icon: '☹', label: 'Negative', value: counts.negative, tone: 'bad' }
+    { icon: '😊', label: t('positive'), value: percents.positive + '%', tone: 'good' },
+    { icon: '😐', label: t('neutral'), value: percents.neutral + '%', tone: 'warn' },
+    { icon: '☹', label: t('negative'), value: percents.negative + '%', tone: 'bad' }
   ]);
+  $('sentimentPercentages').innerHTML = ['positive', 'neutral', 'negative'].map(key => `
+    <div class="percentage-row">
+      <span>${escapeHtml(t(key))}</span>
+      <div class="percentage-track"><div class="percentage-fill ${key}" style="width:${percents[key]}%"></div></div>
+      <strong>${percents[key]}%</strong>
+    </div>
+  `).join('');
+  const cached = publicReviewCache.get(item.id);
+  const publicCount = cached?.status === 'ready' ? cached.reviews.length : 0;
+  $('reviewSourceStatus').textContent = cached?.status === 'loading'
+    ? t('loadingPublic')
+    : t('signals', { total: reviews.length, local: reviews.length - publicCount, public: publicCount });
   const ordered = [...reviews].sort((a, b) => sentimentWeight(b.sentiment) - sentimentWeight(a.sentiment)).slice(0, 8);
-  $('reviewList').innerHTML = ordered.map(review => `<div class="review ${review.sentiment}"><b>${review.sentiment}</b><span>${escapeHtml(review.clean)}</span></div>`).join('');
+  $('reviewList').innerHTML = ordered.map(review => `<div class="review ${review.sentiment}"><b>${review.source ? escapeHtml(review.source) + ' - ' : ''}${review.sentiment}</b><span>${escapeHtml(review.clean)}</span></div>`).join('');
+  loadPublicReviewSignals(item);
+}
+
+function getCombinedReviews(item) {
+  const local = splitReviews(item).map(review => ({ ...review, source: 'Local sample' }));
+  const cached = publicReviewCache.get(item.id);
+  return cached?.status === 'ready' ? local.concat(cached.reviews) : local;
+}
+
+async function loadPublicReviewSignals(item) {
+  const cached = publicReviewCache.get(item.id);
+  if (cached) return;
+  const requestId = ++reviewRequestId;
+  publicReviewCache.set(item.id, { status: 'loading', reviews: [] });
+  try {
+    const snippets = await fetchPublicTextSignals(item);
+    if (requestId !== reviewRequestId && state.selected.id !== item.id) return;
+    const reviews = snippets.map(signal => {
+      const clean = signal.text;
+      return {
+        clean,
+        transport: '',
+        food: '',
+        attraction: clean,
+        sentiment: scoreSentiment(clean, item.rating),
+        source: signal.source
+      };
+    });
+    publicReviewCache.set(item.id, { status: 'ready', reviews });
+    if (state.selected.id === item.id) {
+      renderSentiment(item, getCombinedReviews(item));
+      renderExpenses(item);
+    }
+  } catch (error) {
+    publicReviewCache.set(item.id, { status: 'error', reviews: [] });
+    if (state.selected.id === item.id) renderSentiment(item, getCombinedReviews(item));
+  }
+}
+
+async function fetchPublicTextSignals(item) {
+  const title = encodeURIComponent(item.place.replace(/\s+/g, '_'));
+  const search = encodeURIComponent(`${item.place} ${item.country}`);
+  const signals = [];
+  const endpoints = [
+    { source: 'Wikipedia', url: `https://en.wikipedia.org/api/rest_v1/page/summary/${title}` },
+    { source: 'Wikivoyage', url: `https://en.wikivoyage.org/api/rest_v1/page/summary/${title}` }
+  ];
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint.url);
+      if (!response.ok) continue;
+      const data = await response.json();
+      const text = data.extract || data.description || '';
+      if (text.length > 80 && !/may refer to/i.test(text)) {
+        signals.push({ source: endpoint.source, text: text.slice(0, 700) });
+      }
+    } catch (error) {}
+  }
+  signals.push({
+    source: 'Review source finder',
+    text: `Live traveler reviews for ${item.place} should be checked through official review pages and booking platforms. Search phrase: ${decodeURIComponent(search)} reviews.`
+  });
+  return signals;
 }
 
 function sentimentWeight(sentiment) {
@@ -217,6 +520,400 @@ function attractionIcon(label) {
   if (/Crowd/i.test(label)) return '👥';
   if (/Maintenance/i.test(label)) return '🛠';
   return '⚠';
+}
+
+function renderExpenses(item) {
+  if (!$('expenseSummary')) return;
+  const travelers = clampNumber(Number($('travelerCount').value), 1, 20);
+  const nights = clampNumber(Number($('nightCount').value), 1, 30);
+  const style = $('budgetStyle').value;
+  const countryName = getExpenseCountry(item);
+  const currency = getCurrencyProfile(countryName);
+  activeCurrency = currency;
+  const cost = getCostProfile(countryName, style, item);
+  const lodging = cost.hotel * nights;
+  const food = cost.food * travelers * Math.max(nights, 1);
+  const localTransport = cost.transport * travelers * Math.max(nights, 1);
+  const entry = cost.entry * travelers;
+  const buffer = Math.round((lodging + food + localTransport + entry) * 0.12);
+  const total = lodging + food + localTransport + entry + buffer;
+  const placeNote = getPlaceExpenseNote(item, countryName, cost);
+  $('expenseSummary').innerHTML = `
+    <div class="expense-total"><span>${escapeHtml(t('estimatedTotal', { currency: currency.code }))}</span><strong>${formatMoney(total, currency)}</strong><p class="dashboard-note">${escapeHtml(t('expenseFor', { travelers, nights, style: titleCase(style), country: countryName, pluralTravelers: travelers > 1 ? 's' : '', pluralNights: nights > 1 ? 's' : '' }))}</p></div>
+    <div class="expense-breakdown">
+      ${metricRow([t('hotelStay'), formatMoney(lodging, currency)])}
+      ${metricRow([t('foodWater'), formatMoney(food, currency)])}
+      ${metricRow([t('localTransport'), formatMoney(localTransport, currency)])}
+      ${metricRow([t('tickets'), formatMoney(entry, currency)])}
+      ${metricRow([t('emergencyBuffer'), formatMoney(buffer, currency)])}
+      ${metricRow(['Place-specific basis', placeNote])}
+    </div>
+  `;
+  $('temporaryAdviceList').innerHTML = buildTemporaryAdvice(item, total, style, currency, travelers).map(([title, detail]) => `
+    <div class="season-card"><span>${escapeHtml(title)}</span><strong>${escapeHtml(detail)}</strong></div>
+  `).join('');
+}
+
+function getCostProfile(country, style, item = {}) {
+  const name = (country || '').toLowerCase();
+  const tier = /united states|usa|canada|united kingdom|switzerland|france|germany|italy|japan|australia|netherlands|singapore|uae|emirates/.test(name)
+    ? 'expensive'
+    : /india|nepal|sri lanka|vietnam|thailand|indonesia|mexico|brazil|peru|egypt|morocco|turkey/.test(name)
+      ? 'value'
+      : 'standard';
+  const table = {
+    value: {
+      budget: { hotel: 28, food: 13, transport: 8, entry: 12 },
+      mid: { hotel: 70, food: 28, transport: 18, entry: 24 },
+      premium: { hotel: 150, food: 60, transport: 42, entry: 45 }
+    },
+    standard: {
+      budget: { hotel: 55, food: 22, transport: 14, entry: 18 },
+      mid: { hotel: 125, food: 45, transport: 30, entry: 35 },
+      premium: { hotel: 250, food: 90, transport: 65, entry: 70 }
+    },
+    expensive: {
+      budget: { hotel: 95, food: 38, transport: 24, entry: 28 },
+      mid: { hotel: 210, food: 75, transport: 55, entry: 55 },
+      premium: { hotel: 420, food: 145, transport: 120, entry: 110 }
+    }
+  };
+  const base = table[tier][style] || table[tier].mid;
+  const profile = getPlaceExpenseProfile(item);
+  const transportFactor = /Difficult/i.test(item.transportFacilities) ? 1.25 : /Average/i.test(item.transportFacilities) ? 1.12 : /Excellent/i.test(item.transportFacilities) ? 0.9 : 1;
+  const foodFactor = /Limited/i.test(item.foodAvailability) ? 1.12 : /High/i.test(item.foodAvailability) ? 0.94 : 1;
+  return {
+    hotel: Math.round(base.hotel * profile.factor),
+    food: Math.round(base.food * foodFactor * profile.factor),
+    transport: Math.round(base.transport * transportFactor * profile.factor),
+    entry: Math.round(base.entry * profile.entry),
+    placeLabel: profile.label,
+    tier
+  };
+}
+
+function getPlaceExpenseProfile(item) {
+  const haystack = `${item.place || ''} ${item.locationType || ''} ${item.feedback || ''}`;
+  const rule = PLACE_EXPENSE_RULES.find(entry => entry.pattern.test(haystack));
+  return rule || { factor: 1, entry: 1, label: 'country and local access estimate' };
+}
+
+function getPlaceExpenseNote(item, countryName, cost) {
+  const source = item.id && String(item.id).startsWith('dynamic-') ? 'public map/wiki signals' : 'local dataset plus public signals';
+  return `${item.place}: ${countryName}, ${cost.placeLabel}, ${source}`;
+}
+
+function buildTemporaryAdvice(item, total, style, currency, travelers) {
+  const reviews = getCombinedReviews(item);
+  const text = reviews.map(review => review.clean).join(' ');
+  const advice = [
+    ['Passenger plan', travelers > 4 ? `Plan group transport and reserve rooms early for ${travelers} passengers.` : `Plan tickets, meals, and local rides for ${travelers} passenger${travelers > 1 ? 's' : ''}.`],
+    [t('bookingAdvice'), style === 'budget' ? t('bookingBudget') : t('bookingOther')],
+    [t('moneyAdvice'), t('moneyText', { amount: formatMoney(Math.max(50, Math.round(total * 0.15)), currency) })],
+    [t('reviewAdvice'), t('reviewText')]
+  ];
+  if (/crowded|queues|security/i.test(text)) advice.push([t('timingAdvice'), t('timingText')]);
+  if (/overpriced|trap|expensive/i.test(text)) advice.push([t('priceAdvice'), t('priceText')]);
+  if (/limited|carry your own water/i.test(text)) advice.push([t('foodAdvice'), t('foodText')]);
+  return advice;
+}
+
+function clampNumber(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function getExpenseCountry(item) {
+  return item.resolvedCountry || (item.country === 'Worldwide' ? inferCountryFromPlace(item.place) : item.country) || 'United States';
+}
+
+function inferCountryFromPlace(place) {
+  const name = String(place || '').toLowerCase();
+  const rules = [
+    [/taj mahal|qutub minar|hampi|ajanta|golden temple|munnar|amer fort|varanasi|mysore|goa|kerala|jaipur|delhi|mumbai|agra|bengaluru|chennai|kolkata|hyderabad|ladakh|manali|ooty|rishikesh/i, 'India'],
+    [/eiffel|louvre|versailles|paris|nice|lyon|mont saint michel/i, 'France'],
+    [/colosseum|rome|venice|florence|pisa|milan|amalfi/i, 'Italy'],
+    [/statue of liberty|grand canyon|yellowstone|times square|new york|las vegas|san francisco|los angeles|disneyland/i, 'United States'],
+    [/great wall|forbidden city|shanghai|beijing|terracotta/i, 'China'],
+    [/fuji|kyoto|tokyo|osaka|nara|hiroshima/i, 'Japan'],
+    [/sydney|melbourne|great barrier reef|uluru/i, 'Australia'],
+    [/cape town|kruger|table mountain/i, 'South Africa'],
+    [/machu picchu|cusco|lima/i, 'Peru'],
+    [/pyramids|giza|cairo|luxor/i, 'Egypt'],
+    [/bali|jakarta|borobudur/i, 'Indonesia'],
+    [/phuket|bangkok|chiang mai|pattaya/i, 'Thailand'],
+    [/dubai|abu dhabi|burj khalifa/i, 'UAE'],
+    [/london|stonehenge|edinburgh|manchester/i, 'United Kingdom'],
+    [/rio|christ the redeemer|sao paulo|iguazu/i, 'Brazil']
+  ];
+  return rules.find(([pattern]) => pattern.test(name))?.[1] || 'United States';
+}
+
+function getCurrencyProfile(country) {
+  return COUNTRY_CURRENCY[String(country || '').toLowerCase()] || { code: 'USD', rate: 1, locale: 'en-US' };
+}
+
+function formatMoney(usdValue, currency = activeCurrency || getCurrencyProfile('United States')) {
+  const value = Math.round(usdValue * currency.rate);
+  try {
+    return new Intl.NumberFormat(currency.locale, {
+      style: 'currency',
+      currency: currency.code,
+      maximumFractionDigits: currency.code === 'JPY' || currency.code === 'VND' || currency.code === 'IDR' ? 0 : 0
+    }).format(value);
+  } catch (error) {
+    return `${currency.code} ${value.toLocaleString('en-US')}`;
+  }
+}
+
+async function renderTravelDashboard(item, reviews) {
+  const requestId = ++locationRequestId;
+  $('locationDetails').innerHTML = '<div class="image-loading">Resolving exact location...</div>';
+  $('hotelAvailability').innerHTML = '<div class="image-loading">Searching public lodging data...</div>';
+  $('seasonGuide').innerHTML = renderSeasonGuide(item, null, reviews);
+  $('liveReviewSources').innerHTML = renderReviewSources(item);
+
+  const location = await fetchLocation(item);
+  if (requestId !== locationRequestId) return;
+  if (location?.address?.country) {
+    item.resolvedCountry = location.address.country;
+    if (item.country === 'Worldwide') item.country = location.address.country;
+    item.locationType = location.type;
+    enrichPlaceFromLocation(item, location);
+    updateSelectedSummary(item);
+    renderExpenses(item);
+  }
+
+  $('locationDetails').innerHTML = renderLocationDetails(item, location);
+  $('seasonGuide').innerHTML = renderSeasonGuide(item, location, reviews);
+
+  if (!location) {
+    $('hotelAvailability').innerHTML = '<div class="image-loading">Location not found. Try adding city and country for better hotel results.</div>';
+    return;
+  }
+
+  const hotels = await fetchNearbyHotels(location);
+  if (requestId !== locationRequestId) return;
+  $('hotelAvailability').innerHTML = renderHotels(item, location, hotels);
+}
+
+async function fetchLocation(item) {
+  const query = encodeURIComponent(`${item.place} ${item.country === 'Worldwide' ? '' : item.country}`.trim());
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&q=${query}`;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const data = await response.json();
+    const match = data[0];
+    if (!match) return null;
+    return {
+      lat: Number(match.lat),
+      lon: Number(match.lon),
+      displayName: match.display_name,
+      type: match.type || match.class || 'place',
+      address: match.address || {}
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function enrichPlaceFromLocation(item, location) {
+  const address = location.address || {};
+  const type = `${location.type || ''} ${address.tourism || ''}`.toLowerCase();
+  const name = `${item.place} ${location.displayName || ''}`.toLowerCase();
+  if (/hotel|resort|museum|gallery|theme_park|attraction|viewpoint|zoo|aquarium/.test(type)) {
+    item.foodAvailability = item.foodAvailability === 'Limited' ? 'Medium' : item.foodAvailability;
+  }
+  if (/city|town|suburb|neighbourhood|square|market|station/.test(type)) {
+    item.foodAvailability = 'High';
+    item.transportFacilities = /india|japan|france|germany|united kingdom|singapore/i.test(address.country || '') ? 'Good' : item.transportFacilities;
+  }
+  if (/island|beach|mount|hill|valley|falls|national park|forest|cave|hampi|desert/.test(name)) {
+    item.transportFacilities = /Excellent/.test(item.transportFacilities) ? 'Good' : item.transportFacilities;
+  }
+}
+
+async function fetchNearbyHotels(location) {
+  const query = `[out:json][timeout:12];(node["tourism"~"hotel|guest_house|hostel|motel|apartment"](around:5000,${location.lat},${location.lon});way["tourism"~"hotel|guest_house|hostel|motel|apartment"](around:5000,${location.lat},${location.lon});relation["tourism"~"hotel|guest_house|hostel|motel|apartment"](around:5000,${location.lat},${location.lon}););out center tags 18;`;
+  try {
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: query
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return (data.elements || [])
+      .map(element => {
+        const lat = element.lat || element.center?.lat;
+        const lon = element.lon || element.center?.lon;
+        const distance = lat && lon ? distanceKm(location.lat, location.lon, lat, lon) : null;
+        return {
+          name: element.tags?.name || titleCase(element.tags?.tourism || 'Nearby stay'),
+          type: titleCase(element.tags?.tourism || 'lodging'),
+          stars: element.tags?.stars || element.tags?.['hotel:stars'] || '',
+          website: element.tags?.website || element.tags?.['contact:website'] || '',
+          phone: element.tags?.phone || element.tags?.['contact:phone'] || '',
+          distance
+        };
+      })
+      .filter(hotel => hotel.name)
+      .sort((a, b) => (a.distance || 99) - (b.distance || 99))
+      .slice(0, 8);
+  } catch (error) {
+    return [];
+  }
+}
+
+function renderLocationDetails(item, location) {
+  if (!location) {
+    return '<div class="image-loading">No exact public map match found yet.</div>';
+  }
+  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${location.lon - 0.02}%2C${location.lat - 0.02}%2C${location.lon + 0.02}%2C${location.lat + 0.02}&layer=mapnik&marker=${location.lat}%2C${location.lon}`;
+  const openMapUrl = `https://www.openstreetmap.org/?mlat=${location.lat}&mlon=${location.lon}#map=15/${location.lat}/${location.lon}`;
+  return `
+    <div class="info-tile"><span>Resolved address</span><strong>${escapeHtml(location.displayName)}</strong></div>
+    <div class="info-tile"><span>Coordinates</span><strong>${location.lat.toFixed(5)}, ${location.lon.toFixed(5)}</strong></div>
+    <iframe title="${escapeHtml(item.place)} map" loading="lazy" src="${mapUrl}"></iframe>
+    <div class="travel-actions">
+      <a href="${openMapUrl}" target="_blank" rel="noopener">Open map</a>
+      <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.place + ' ' + item.country)}" target="_blank" rel="noopener">Google Maps</a>
+    </div>
+  `;
+}
+
+function renderHotels(item, location, hotels) {
+  const range = estimateHotelRange(item, location);
+  const bookingQuery = encodeURIComponent(`${item.place} ${item.country} hotels`);
+  const intro = `
+    <div class="info-tile">
+      <span>${escapeHtml(t('priceRange'))}</span>
+      <strong>${range}</strong>
+      <p class="dashboard-note">${escapeHtml(t('priceNote'))}</p>
+      <div class="travel-actions">
+        <a href="https://www.booking.com/searchresults.html?ss=${bookingQuery}" target="_blank" rel="noopener">Booking.com</a>
+        <a href="https://www.google.com/travel/hotels?q=${bookingQuery}" target="_blank" rel="noopener">Google Hotels</a>
+        <a href="https://www.tripadvisor.com/Search?q=${bookingQuery}" target="_blank" rel="noopener">Tripadvisor</a>
+      </div>
+    </div>
+  `;
+  if (!hotels.length) {
+    return intro + '<div class="image-loading">No OpenStreetMap lodging records found within about 5 km. Use the booking links for live availability.</div>';
+  }
+  return intro + hotels.map(hotel => `
+    <div class="hotel-card">
+      <span>${escapeHtml(hotel.type)}${hotel.distance ? `, ${hotel.distance.toFixed(1)} km away` : ''}</span>
+      <strong>${escapeHtml(hotel.name)}</strong>
+      <div class="hotel-meta">
+        ${hotel.stars ? `<b>${escapeHtml(String(hotel.stars))} star</b>` : ''}
+        ${hotel.website ? '<b>Website listed</b>' : ''}
+        ${hotel.phone ? '<b>Phone listed</b>' : ''}
+      </div>
+      <div class="travel-actions">
+        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hotel.name + ' near ' + item.place)}" target="_blank" rel="noopener">Map</a>
+        ${hotel.website ? `<a href="${escapeHtml(hotel.website)}" target="_blank" rel="noopener">Website</a>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function estimateHotelRange(item, location) {
+  const countryName = location?.address?.country || item.country || 'United States';
+  const currency = getCurrencyProfile(countryName);
+  const country = countryName.toLowerCase();
+  const expensive = /united states|usa|canada|united kingdom|switzerland|france|germany|italy|japan|australia|netherlands|singapore|uae|emirates/.test(country);
+  const value = /india|nepal|sri lanka|vietnam|thailand|indonesia|mexico|brazil|peru|egypt|morocco|turkey/.test(country);
+  if (expensive) return `Budget ${formatMoney(70, currency)}-${formatMoney(140, currency)}, mid-range ${formatMoney(140, currency)}-${formatMoney(280, currency)}, premium ${formatMoney(280, currency)}+ per night`;
+  if (value) return `Budget ${formatMoney(18, currency)}-${formatMoney(45, currency)}, mid-range ${formatMoney(45, currency)}-${formatMoney(110, currency)}, premium ${formatMoney(110, currency)}+ per night`;
+  return `Budget ${formatMoney(35, currency)}-${formatMoney(80, currency)}, mid-range ${formatMoney(80, currency)}-${formatMoney(180, currency)}, premium ${formatMoney(180, currency)}+ per night`;
+}
+
+function renderSeasonGuide(item, location, reviews) {
+  const profile = inferSeasonProfile(item, location);
+  const recommendation = seasonalRecommendation(item, reviews, profile);
+  return `
+    <div class="season-card"><span>${escapeHtml(t('bestSeason'))}</span><strong>${escapeHtml(profile.best)}</strong><p>${escapeHtml(profile.reason)}</p></div>
+    <div class="season-card"><span>${escapeHtml(t('recommendedSeason'))}</span><strong>${escapeHtml(recommendation.title)}</strong><p>${escapeHtml(recommendation.detail)}</p></div>
+    <div class="season-card"><span>${escapeHtml(t('planningCaution'))}</span><strong>${escapeHtml(profile.caution)}</strong><p class="dashboard-note">${escapeHtml(t('seasonNote'))}</p></div>
+  `;
+}
+
+function inferSeasonProfile(item, location) {
+  const country = (location?.address?.country || item.country || '').toLowerCase();
+  const lat = location?.lat;
+  const place = `${item.place || ''} ${location?.displayName || ''}`.toLowerCase();
+  if (/beach|island|coast|goa|maldives|bali|phuket|santorini|seychelles/.test(place)) {
+    if (/india|sri lanka|bangladesh|pakistan/.test(country)) {
+      return { best: 'November to February', reason: 'Coastal weather is cooler and drier, so beaches, food walks, and local transfers are easier.', caution: 'Holiday weeks can raise hotel and taxi prices near beaches.' };
+    }
+    return { best: 'Dry season or shoulder months', reason: 'Beach and island trips work best when rain, rough seas, and humidity are lower.', caution: 'Check cyclone, monsoon, and ferry schedules before booking.' };
+  }
+  if (/mount|mountain|hill|valley|falls|waterfall|trek|national park|forest|safari|desert/.test(place)) {
+    if (/india|nepal|pakistan/.test(country)) {
+      return { best: 'October to March, or April to June for hill stations', reason: 'Outdoor routes are usually clearer, with safer road access and better visibility.', caution: 'Monsoon months can affect roads, treks, waterfalls, and park access.' };
+    }
+    return { best: 'Local dry shoulder season', reason: 'Nature trips depend on trail access, visibility, wildlife timings, and road conditions.', caution: 'Verify park closures, permits, snow, heat, and rainfall for the exact place.' };
+  }
+  if (/temple|mosque|church|cathedral|palace|fort|castle|museum|caves?|monument|memorial|heritage/.test(place)) {
+    if (/india|nepal|sri lanka|bangladesh|pakistan/.test(country)) {
+      return { best: 'October to March', reason: 'Cooler weather helps with walking, queues, heritage visits, and nearby food stops.', caution: 'Festival dates can improve the experience but also increase crowds and hotel prices.' };
+    }
+    return { best: 'Spring or autumn shoulder season', reason: 'Heritage and city attractions are smoother with mild weather and lighter peak-season crowds.', caution: 'Check opening days, restoration closures, and public holidays.' };
+  }
+  if (/india|nepal|sri lanka|bangladesh|pakistan/.test(country)) {
+    return { best: 'October to March', reason: 'Cooler, drier weather is usually more comfortable for sightseeing.', caution: 'Avoid peak heat from April to June and check monsoon conditions.' };
+  }
+  if (/thailand|vietnam|cambodia|indonesia|malaysia|philippines|singapore/.test(country)) {
+    return { best: 'November to February', reason: 'This is commonly the drier, milder travel window across much of Southeast Asia.', caution: 'Rainy season and holiday crowds vary by island or region.' };
+  }
+  if (/france|italy|spain|germany|netherlands|switzerland|united kingdom|greece|portugal/.test(country)) {
+    return { best: 'April to June or September to October', reason: 'Shoulder seasons balance pleasant weather with fewer peak-summer crowds.', caution: 'August can be crowded and expensive in major tourist cities.' };
+  }
+  if (/united states|usa|canada/.test(country)) {
+    return { best: 'May to June or September to October', reason: 'Shoulder seasons often bring good weather and better hotel value.', caution: 'National parks, beaches, and ski towns have separate peak seasons.' };
+  }
+  if (/australia|new zealand|south africa|argentina|chile/.test(country) || (typeof lat === 'number' && lat < -15)) {
+    return { best: 'March to May or September to November', reason: 'Southern Hemisphere shoulder months are usually comfortable for city and nature trips.', caution: 'Summer holidays can raise hotel prices near beaches and landmarks.' };
+  }
+  return { best: 'Spring or autumn shoulder season', reason: 'Moderate weather and lower crowd pressure usually make the visit smoother.', caution: 'Check local festivals, rainy months, and public holidays before booking.' };
+}
+
+function seasonalRecommendation(item, reviews, profile) {
+  const text = reviews.map(review => review.clean).join(' ');
+  if (/sunrise/i.test(text)) return { title: 'Book an early stay nearby', detail: `During ${profile.best}, choose a hotel within easy morning reach and plan sunrise entry.` };
+  if (/photography|views|breathtaking/i.test(text)) return { title: 'Prioritize clear-weather days', detail: `During ${profile.best}, keep a flexible day for photos, viewpoints, and walking routes.` };
+  if (/crowded|queues/i.test(text)) return { title: 'Use weekday mornings', detail: `During ${profile.best}, visit on weekdays and reserve hotels early near the attraction.` };
+  return { title: 'Stay close and keep one flexible day', detail: `During ${profile.best}, pick lodging near transit and leave time for food, local routes, and weather changes.` };
+}
+
+function renderReviewSources(item) {
+  const query = encodeURIComponent(`${item.place} ${item.country}`);
+  const reviewQuery = encodeURIComponent(`${item.place} ${item.country} reviews`);
+  return [
+    ['Tripadvisor reviews', `https://www.tripadvisor.com/Search?q=${reviewQuery}`, 'Traveler reviews and attraction discussions.'],
+    ['Google review search', `https://www.google.com/search?q=${reviewQuery}`, 'Broad review search across public web results.'],
+    ['Wikivoyage guide', `https://en.wikivoyage.org/wiki/Special:Search?search=${query}`, 'Travel guide context, safety, food, and transit notes.'],
+    ['Google News', `https://news.google.com/search?q=${query}`, 'Recent access, weather, crowd, and local event updates.']
+  ].map(([title, url, detail]) => `
+    <div class="source-card">
+      <span>${escapeHtml(detail)}</span>
+      <strong>${escapeHtml(title)}</strong>
+      <div class="travel-actions"><a href="${url}" target="_blank" rel="noopener">${escapeHtml(t('openSource'))}</a></div>
+    </div>
+  `).join('');
+}
+
+function distanceKm(lat1, lon1, lat2, lon2) {
+  const toRad = value => value * Math.PI / 180;
+  const earth = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return earth * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function titleCase(value) {
+  return String(value).replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
 }
 
 async function renderImages(item) {
